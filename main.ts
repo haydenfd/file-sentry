@@ -7,26 +7,39 @@ interface FileInfo {
     ctime?: string;
 }
 
-class UnlockModal extends Modal {
-    onSubmit: () => void;
+class PasswordModal extends Modal {
+    private onSubmit: (password: string) => void;
 
-    constructor(app: App, onSubmit: () => void) {
+    constructor(app: App, onSubmit: (password: string) => void) {
         super(app);
         this.onSubmit = onSubmit;
     }
 
     onOpen() {
         const { contentEl } = this;
-        contentEl.empty();
+        contentEl.addClass('password-modal');
 
-        const submitButton = new ButtonComponent(contentEl)
-            .setButtonText("Submit")
-            .onClick(() => {
-                this.onSubmit();
+        contentEl.createEl('h2', { text: 'Heimdall says stop!' });
+
+        const inputEl = contentEl.createEl('input', {
+            type: 'password',
+            placeholder: "What's the pass, bro?",
+        });
+
+        const buttonContainer = contentEl.createDiv({ cls: 'button-container' });
+        const submitButton = buttonContainer.createEl('button', { text: 'Submit' });
+
+        submitButton.onclick = () => {
+            this.onSubmit(inputEl.value);
+            this.close();
+        };
+
+        inputEl.onkeydown = (event) => {
+            if (event.key === 'Enter') {
+                this.onSubmit(inputEl.value);
                 this.close();
-            });
-
-        contentEl.appendChild(submitButton.buttonEl);
+            }
+        };
     }
 
     onClose() {
@@ -34,6 +47,7 @@ class UnlockModal extends Modal {
         contentEl.empty();
     }
 }
+
 
 export default class PasswordProtectPlugin extends Plugin {
     private protectedFiles: FileInfo[] = [];
@@ -54,7 +68,7 @@ export default class PasswordProtectPlugin extends Plugin {
                 const isProtected = this.isFileProtected(file);
                 menu.addItem((item) => {
                     item.setTitle(isProtected ? 'Unlock file' : 'Lock file')
-                        .setIcon('documents')
+                        .setIcon('lock')
                         .onClick(() => this.toggleFileProtection(file, isProtected));
                 });
             }
@@ -67,11 +81,13 @@ export default class PasswordProtectPlugin extends Plugin {
         this.registerEvent(this.app.workspace.on('active-leaf-change', (leaf: WorkspaceLeaf | null) => {
             this.updateStatusBar(leaf);
             this.updateContentVisibility(leaf);
+            this.addToggleIcon(leaf);
         }));
 
         // Initial status bar update
         this.updateStatusBar(this.app.workspace.activeLeaf);
         this.updateContentVisibility(this.app.workspace.activeLeaf);
+        this.addToggleIcon(this.app.workspace.activeLeaf);
 
         // Add a ribbon icon to toggle visibility
         const ribbonIconEl = this.addRibbonIcon('dice', 'Toggle Visibility', () => {
@@ -80,6 +96,16 @@ export default class PasswordProtectPlugin extends Plugin {
 
         // Perform additional things with the ribbon
         ribbonIconEl.addClass('password-protect-ribbon-class');
+
+        // Add lock icons to protected files in the file explorer
+        this.registerEvent(this.app.vault.on('modify', (file) => {
+            if (file instanceof TFile) {
+                this.updateFileExplorerIcons(file);
+            }
+        }));
+
+        // Initial file explorer icons update
+        this.updateAllFileExplorerIcons();
     }
 
     addCssClass() {
@@ -106,6 +132,15 @@ export default class PasswordProtectPlugin extends Plugin {
             }
             .placeholder {
                 display: none;
+            }
+            .toggle-lock-icon {
+                cursor: pointer;
+                margin-left: 8px;
+            }
+            .file-explorer-lock-icon {
+                margin-left: auto;
+                margin-right: 8px;
+                cursor: pointer;
             }
         `;
         document.head.append(style);
@@ -135,10 +170,12 @@ export default class PasswordProtectPlugin extends Plugin {
         const activeLeaf = this.app.workspace.activeLeaf;
         if (activeLeaf && activeLeaf.view && activeLeaf.view.file === file) {
             this.updateContentVisibility(activeLeaf);
+            this.addToggleIcon(activeLeaf);
         }
-    }
 
-    // maybe improve this to be instantaneous? Or block? 
+        // Update the file explorer icons
+        this.updateFileExplorerIcons(file);
+    }
 
     async saveProtectedFiles() {
         try {
@@ -213,9 +250,11 @@ export default class PasswordProtectPlugin extends Plugin {
             if (leaf.view.containerEl.classList.contains('hidden-content')) {
                 leaf.view.containerEl.classList.remove('hidden-content');
                 this.removePlaceholder(leaf.view.containerEl);
+                this.addToggleIcon(leaf);
             } else {
                 leaf.view.containerEl.classList.add('hidden-content');
                 this.addPlaceholder(leaf.view.containerEl);
+                this.addToggleIcon(leaf);
             }
         }
     }
@@ -233,7 +272,7 @@ export default class PasswordProtectPlugin extends Plugin {
 
             const unlockButton = placeholder.querySelector('#unlock-btn');
             unlockButton?.addEventListener('click', () => {
-                new UnlockModal(this.app, () => {
+                new PasswordModal(this.app, () => {
                     containerEl.classList.remove('hidden-content');
                     this.removePlaceholder(containerEl);
                 }).open();
@@ -246,6 +285,73 @@ export default class PasswordProtectPlugin extends Plugin {
         if (placeholder) {
             containerEl.removeChild(placeholder);
         }
+    }
+
+    addToggleIcon(leaf: WorkspaceLeaf | null) {
+        if (!leaf || !leaf.view || !(leaf.view.file instanceof TFile)) {
+            return;
+        }
+
+        const file = leaf.view.file as TFile;
+        if (!this.isFileProtected(file)) {
+            return;
+        }
+
+        const headerEl = leaf.view.containerEl.querySelector('.view-header');
+        if (!headerEl) {
+            return;
+        }
+
+        let toggleIcon = headerEl.querySelector('.toggle-lock-icon');
+        if (!toggleIcon) {
+            toggleIcon = document.createElement('div');
+            toggleIcon.className = 'toggle-lock-icon';
+            headerEl.appendChild(toggleIcon);
+        }
+
+        toggleIcon.innerHTML = leaf.view.containerEl.classList.contains('hidden-content')
+            ? '<svg aria-hidden="true" focusable="false" data-prefix="fas" data-icon="lock-keyhole-open" class="svg-inline--fa fa-lock-keyhole-open fa-w-14" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path fill="currentColor" d="M400 192h-24V112c0-61.86-50.14-112-112-112S152 50.14 152 112v80h-24C57.31 192 0 249.3 0 320v128c0 70.69 57.31 128 128 128h272c70.69 0 128-57.31 128-128V320c0-70.7-57.3-128-128-128zM128 320v128c0 35.29 28.71 64 64 64h160c35.29 0 64-28.71 64-64V320c0-35.29-28.71-64-64-64H192c-35.29 0-64 28.71-64 64zM224 320h48c8.84 0 16 7.16 16 16s-7.16 16-16 16h-48c-8.84 0-16-7.16-16-16s7.16-16 16-16zm160-208V112c0-44.11-35.89-80-80-80s-80 35.89-80 80v80h160z"></path></svg>'
+            : '<svg aria-hidden="true" focusable="false" data-prefix="fas" data-icon="lock-keyhole" class="svg-inline--fa fa-lock-keyhole fa-w-14" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path fill="currentColor" d="M400 192h-24V112c0-61.86-50.14-112-112-112S152 50.14 152 112v80h-24C57.31 192 0 249.3 0 320v128c0 70.69 57.31 128 128 128h272c70.69 0 128-57.31 128-128V320c0-70.7-57.3-128-128-128zM128 320v128c0 35.29 28.71 64 64 64h160c35.29 0 64-28.71 64-64V320c0-35.29-28.71-64-64-64H192c-35.29 0-64 28.71-64 64zM224 320h48c8.84 0 16 7.16 16 16s-7.16 16-16 16h-48c-8.84 0-16-7.16-16-16s7.16-16 16-16zm160-208V112c0-44.11-35.89-80-80-80s-80 35.89-80 80v80h160z"></path></svg>';
+
+        toggleIcon.onclick = () => {
+            if (leaf.view.containerEl.classList.contains('hidden-content')) {
+                new PasswordModal(this.app, () => {
+                    leaf.view.containerEl.classList.remove('hidden-content');
+                    this.removePlaceholder(leaf.view.containerEl);
+                    this.addToggleIcon(leaf);
+                }).open();
+            } else {
+                leaf.view.containerEl.classList.add('hidden-content');
+                this.addPlaceholder(leaf.view.containerEl);
+                this.addToggleIcon(leaf);
+            }
+        };
+    }
+
+    updateFileExplorerIcons(file: TFile) {
+        const fileExplorerEl = document.querySelector(`[data-path="${file.path}"]`);
+        if (!fileExplorerEl) {
+            return;
+        }
+
+        let lockIcon = fileExplorerEl.querySelector('.file-explorer-lock-icon');
+        if (!lockIcon) {
+            lockIcon = document.createElement('div');
+            lockIcon.className = 'file-explorer-lock-icon';
+            fileExplorerEl.appendChild(lockIcon);
+        }
+
+        if (this.isFileProtected(file)) {
+            lockIcon.innerHTML = '<svg aria-hidden="true" focusable="false" data-prefix="fas" data-icon="lock-keyhole" class="svg-inline--fa fa-lock-keyhole fa-w-14" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path fill="currentColor" d="M400 192h-24V112c0-61.86-50.14-112-112-112S152 50.14 152 112v80h-24C57.31 192 0 249.3 0 320v128c0 70.69 57.31 128 128 128h272c70.69 0 128-57.31 128-128V320c0-70.7-57.3-128-128-128zM128 320v128c0 35.29 28.71 64 64 64h160c35.29 0 64-28.71 64-64V320c0-35.29-28.71-64-64-64H192c-35.29 0-64 28.71-64 64zM224 320h48c8.84 0 16 7.16 16 16s-7.16 16-16 16h-48c-8.84 0-16-7.16-16-16s7.16-16 16-16zm160-208V112c0-44.11-35.89-80-80-80s-80 35.89-80 80v80h160z"></path></svg>';
+            lockIcon.onclick = () => this.toggleFileProtection(file, true);
+        } else {
+            lockIcon.innerHTML = '';
+        }
+    }
+
+    updateAllFileExplorerIcons() {
+        const allFiles = this.app.vault.getFiles();
+        allFiles.forEach(file => this.updateFileExplorerIcons(file));
     }
 
     async onunload() {
