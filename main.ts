@@ -54,7 +54,7 @@ export default class PasswordProtectPlugin extends Plugin {
                 const isProtected = this.isFileProtected(file);
                 menu.addItem((item) => {
                     item.setTitle(isProtected ? 'Unlock file' : 'Lock file')
-                        .setIcon('lock')
+                        .setIcon('documents')
                         .onClick(() => this.toggleFileProtection(file, isProtected));
                 });
             }
@@ -94,7 +94,7 @@ export default class PasswordProtectPlugin extends Plugin {
                 align-items: center;
                 flex-direction: column;
                 position: absolute;
-                top: -50px;
+                top: 0;
                 left: 0;
                 width: 100%;
                 height: 100%;
@@ -102,6 +102,7 @@ export default class PasswordProtectPlugin extends Plugin {
                 text-align: center;
                 font-size: 1.5em;
                 color: dodgerblue;
+                gap: 2rem;
             }
             .placeholder {
                 display: none;
@@ -129,7 +130,15 @@ export default class PasswordProtectPlugin extends Plugin {
 
         // Update the visibility of the content
         this.updateContentVisibility(this.app.workspace.activeLeaf);
+
+        // Immediately update visibility if the toggled file is currently active
+        const activeLeaf = this.app.workspace.activeLeaf;
+        if (activeLeaf && activeLeaf.view && activeLeaf.view.file === file) {
+            this.updateContentVisibility(activeLeaf);
+        }
     }
+
+    // maybe improve this to be instantaneous? Or block? 
 
     async saveProtectedFiles() {
         try {
@@ -200,12 +209,14 @@ export default class PasswordProtectPlugin extends Plugin {
             return;
         }
 
-        if (leaf.view.containerEl.classList.contains('hidden-content')) {
-            leaf.view.containerEl.classList.remove('hidden-content');
-            this.removePlaceholder(leaf.view.containerEl);
-        } else {
-            leaf.view.containerEl.classList.add('hidden-content');
-            this.addPlaceholder(leaf.view.containerEl);
+        if (this.isFileProtected(leaf.view.file)) {
+            if (leaf.view.containerEl.classList.contains('hidden-content')) {
+                leaf.view.containerEl.classList.remove('hidden-content');
+                this.removePlaceholder(leaf.view.containerEl);
+            } else {
+                leaf.view.containerEl.classList.add('hidden-content');
+                this.addPlaceholder(leaf.view.containerEl);
+            }
         }
     }
 
