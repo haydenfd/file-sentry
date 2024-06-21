@@ -1,6 +1,11 @@
 import { Modal, App } from "obsidian";
 import * as Types from '../_types';
 
+/* 
+    TODO: UPDATE STYLING OF MODAL 
+    Potentially pass in password as 3rd param to avoid RT-ing state?
+*/
+
 export class PasswordModal extends Modal {
 
     private onSubmit: Types.SubmitPasswordFunction;
@@ -20,7 +25,7 @@ export class PasswordModal extends Modal {
             placeholder: "What's the pass, bro?",
         });
 
-        const buttonContainer = contentEl.createDiv({ cls: 'button-container' });
+        const buttonContainer = <HTMLDivElement>contentEl.createDiv({ cls: 'button-container' });
         const submitButton = buttonContainer.createEl('button', { text: 'Submit' });
 
         submitButton.onclick = () => {

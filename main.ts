@@ -4,7 +4,6 @@ import * as path from 'path';
 import * as Types from './_types';
 import { PasswordModal } from 'Modals/PasswordModal';
 
-
 export default class Heimdall extends Plugin {
     private protectedFiles: Types.FileInfo[] = [];
     private statusBarItemEl: HTMLElement;
@@ -66,7 +65,7 @@ export default class Heimdall extends Plugin {
     }
 
     addCssClass() {
-        const style = document.createElement('style');
+        const style = <HTMLStyleElement>document.createElement('style');
         style.textContent = `
             .hidden-content .view-content {
                 visibility: hidden;
@@ -89,15 +88,6 @@ export default class Heimdall extends Plugin {
             }
             .placeholder {
                 display: none;
-            }
-            .toggle-lock-icon {
-                cursor: pointer;
-                margin-left: 8px;
-            }
-            .file-explorer-lock-icon {
-                margin-left: auto;
-                margin-right: 8px;
-                cursor: pointer;
             }
         `;
         document.head.append(style);
@@ -127,18 +117,18 @@ export default class Heimdall extends Plugin {
         const activeLeaf = this.app.workspace.activeLeaf;
         if (activeLeaf && activeLeaf.view && activeLeaf.view.file === file) {
             this.updateContentVisibility(activeLeaf);
-            this.addToggleIcon(activeLeaf);
+            // this.addToggleIcon(activeLeaf);
         }
 
         // Update the file explorer icons
-        this.updateFileExplorerIcons(file);
+        // this.updateFileExplorerIcons(file);
     }
 
     async saveProtectedFiles() {
         try {
             const data = JSON.stringify(this.protectedFiles);
-            const filePath = this.getProtectedFileStoreAbsolutePath();
-            fs.writeFileSync(filePath, data);
+            const protectedFilesStorePath = this.getProtectedFileStoreAbsolutePath();
+            fs.writeFileSync(protectedFilesStorePath, data);
         } catch (error) {
             console.error('Failed to save protected files:', error);
         }
@@ -148,13 +138,13 @@ export default class Heimdall extends Plugin {
         try {
             const filePath = this.getProtectedFileStoreAbsolutePath();
             console.log(`File path: ${filePath}`);
-            if (!fs.existsSync(filePath)) {
-                console.log("DNE, tried creating");
-                fs.writeFileSync(filePath, JSON.stringify([]));  // There has to be a better way to do this. 
+
+            const data:ArrayBuffer = await FileSystemAdapter.readLocalFile(filePath);
+            if (data) {
+                console.log(data); // error handling if the json file DNE. Needed here?
             }
-            const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-            this.protectedFiles = data;
-            console.log(`Loaded ${this.protectedFiles.length} protected files from storage.`);
+            const decoder = new TextDecoder('utf-8');
+            this.protectedFiles = JSON.parse(decoder.decode(data));
         } catch (error) {
             console.error('Failed to load protected files:', error);
         }
@@ -325,11 +315,10 @@ export default class Heimdall extends Plugin {
     // }
 
     async onunload() {
-        console.log('Unloading Password Protect Plugin');
-        // Save protected files to storage
+
         await this.saveProtectedFiles();
 
-        // Remove the hidden-content class and placeholders from all leaves
+        // Remove the hidden-content class and placeholders from all leaves --  Should not be necessary?
         const leaves = this.app.workspace.getLeavesOfType('*');
         leaves.forEach(leaf => {
             if (leaf.view) {
