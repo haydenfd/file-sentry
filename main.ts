@@ -1,14 +1,29 @@
-import { App, Plugin, TFile, Notice, WorkspaceLeaf, ButtonComponent, FileSystemAdapter } from 'obsidian';
+import { 
+        App, 
+        Plugin, 
+        TFile, 
+        Notice, 
+        WorkspaceLeaf, 
+        FileSystemAdapter,
+        Workspace,
+        WorkspaceWindow, 
+        FileView,
+        Menu,
+        MarkdownView,
+    } from 'obsidian';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as Types from './_types';
 import { PasswordModal } from 'Modals/PasswordModal';
+import { ExampleView, VIEW_TYPE_EXAMPLE } from 'views';
 
 export default class Heimdall extends Plugin {
     private protectedFiles: Types.FileInfo[] = [];
     private statusBarItemEl: HTMLElement;
+    private unlockRibbonEl: HTMLElement | null;
 
     async onload() {
+        
         console.log('Loading Password Protect Plugin');
         console.log(this.getProtectedFileStoreAbsolutePath());
 
@@ -34,10 +49,40 @@ export default class Heimdall extends Plugin {
         this.statusBarItemEl = this.addStatusBarItem();
 
         // Update the status bar when the active leaf changes
-        this.registerEvent(this.app.workspace.on('active-leaf-change', (leaf: WorkspaceLeaf | null) => {
-            this.updateStatusBar(leaf);
-            this.updateContentVisibility(leaf);
-            // this.addToggleIcon(leaf);
+        this.registerEvent(this.app.workspace.on('file-open', (file: TFile | null) => {
+            // this.updateStatusBar(currentLeaf);
+            // this.updateContentVisibility(currentLeaf);
+            // this.updateRibbonIcon(currentLeaf);
+            if (file instanceof TFile) {
+                if (this.isFileProtected(file)) {
+                    if (this.unlockRibbonEl) {
+                        console.log('unlock exists');
+                        this.unlockRibbonEl.remove();
+                        this.unlockRibbonEl = null;
+                    }
+            
+                this.unlockRibbonEl = this.addRibbonIcon('unlock', 'Unlock File', () => {
+                        new Notice('Enter password!');
+                        this.unlockRibbonEl?.remove();
+                        this.unlockRibbonEl = this.addRibbonIcon('lock', 'Lock File', () => {
+                            new Notice("Locked");
+                        });
+
+                      });
+                }
+            }
+
+            // const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
+            // if (markdownView) {
+            //     console.log(markdownView instanceof FileView);
+            //     if (markdownView.file instanceof TFile && this.isFileProtected(markdownView.file)) {
+            //         this.addRibbonIcon("unlock", "Unlock this file", () => {
+            //             console.log('Cockkkkkks');
+            //         });
+            //     }
+
+            // }
+
         }));
 
         // Initial status bar update
@@ -62,7 +107,37 @@ export default class Heimdall extends Plugin {
 
         // // Initial file explorer icons update
         // this.updateAllFileExplorerIcons();
+
+        this.registerView(
+            VIEW_TYPE_EXAMPLE,
+            (leaf) => new ExampleView(leaf)
+          );
+      
     }
+
+    updateRibbonIcon(leaf: WorkspaceLeaf | null) {
+
+    }
+
+    async activateView() {
+        const { workspace } = this.app;
+    
+        let leaf: WorkspaceLeaf | null = null;
+        const leaves = workspace.getLeavesOfType(VIEW_TYPE_EXAMPLE);
+    
+        if (leaves.length > 0) {
+          // A leaf with our view already exists, use that
+          leaf = leaves[0];
+        } else {
+          // Our view could not be found in the workspace, create a new leaf
+          // in the right sidebar for it
+          leaf = workspace.getRightLeaf(false);
+          await leaf.setViewState({ type: VIEW_TYPE_EXAMPLE, active: true });
+        }
+    
+        // "Reveal" the leaf in case it is in a collapsed sidebar
+        workspace.revealLeaf(leaf);
+      }
 
     addCssClass() {
         const style = <HTMLStyleElement>document.createElement('style');
@@ -90,6 +165,8 @@ export default class Heimdall extends Plugin {
                 display: none;
             }
         `;
+        // console.log(this.app.workspace.containerEl);
+
         document.head.append(style);
     }
 
@@ -126,9 +203,10 @@ export default class Heimdall extends Plugin {
 
     async saveProtectedFiles() {
         try {
-            const data = JSON.stringify(this.protectedFiles);
+            const data = JSON.stringify(this.protectedFiles, null, 2);
             const protectedFilesStorePath = this.getProtectedFileStoreAbsolutePath();
             fs.writeFileSync(protectedFilesStorePath, data);
+            // maybe not json but txt then can use DataAdapter. Could be moot though
         } catch (error) {
             console.error('Failed to save protected files:', error);
         }
@@ -320,6 +398,7 @@ export default class Heimdall extends Plugin {
 
         // Remove the hidden-content class and placeholders from all leaves --  Should not be necessary?
         const leaves = this.app.workspace.getLeavesOfType('*');
+        this.unlockRibbonEl?.remove();
         leaves.forEach(leaf => {
             if (leaf.view) {
                 leaf.view.containerEl.classList.remove('hidden-content');
