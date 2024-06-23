@@ -5,8 +5,6 @@ import {
         Notice, 
         WorkspaceLeaf, 
         FileSystemAdapter,
-        Workspace,
-        WorkspaceWindow, 
         FileView,
         Menu,
         MarkdownView,
@@ -15,7 +13,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as Types from './_types';
 import { PasswordModal } from 'Modals/PasswordModal';
-import { ExampleView, VIEW_TYPE_EXAMPLE } from 'views';
 
 export default class Heimdall extends Plugin {
     private protectedFiles: Types.FileInfo[] = [];
@@ -51,15 +48,23 @@ export default class Heimdall extends Plugin {
         // Update the status bar when the active leaf changes
         this.registerEvent(this.app.workspace.on('file-open', (file: TFile | null) => {
             // this.updateStatusBar(currentLeaf);
-            // this.updateContentVisibility(currentLeaf);
+            this.updateContentVisibility(currentLeaf);
             // this.updateRibbonIcon(currentLeaf);
             if (file instanceof TFile) {
+                console.log('hi');
+                // const x = this.app.workspace.containerEl.querySelector('body > div.app-container > div.horizontal-main-container > div > div.workspace-split.mod-vertical.mod-root > div > div.workspace-tab-container > div.workspace-leaf.mod-active > div.workspace-leaf-content>div.view-content>div.markdown-reading-view');
+                // if (x) {
+                //     (x as HTMLElement).style.visibility = 'hidden';
+                //     this.addPlaceholder(x.parentElement);
+                // }
+
                 if (this.isFileProtected(file)) {
                     if (this.unlockRibbonEl) {
                         console.log('unlock exists');
                         this.unlockRibbonEl.remove();
                         this.unlockRibbonEl = null;
                     }
+                
             
                 this.unlockRibbonEl = this.addRibbonIcon('unlock', 'Unlock File', () => {
                         new Notice('Enter password!');
@@ -69,6 +74,8 @@ export default class Heimdall extends Plugin {
                         });
 
                       });
+                } else {
+                    this.unlockRibbonEl?.remove();
                 }
             }
 
@@ -107,38 +114,8 @@ export default class Heimdall extends Plugin {
 
         // // Initial file explorer icons update
         // this.updateAllFileExplorerIcons();
-
-        this.registerView(
-            VIEW_TYPE_EXAMPLE,
-            (leaf) => new ExampleView(leaf)
-          );
       
     }
-
-    updateRibbonIcon(leaf: WorkspaceLeaf | null) {
-
-    }
-
-    async activateView() {
-        const { workspace } = this.app;
-    
-        let leaf: WorkspaceLeaf | null = null;
-        const leaves = workspace.getLeavesOfType(VIEW_TYPE_EXAMPLE);
-    
-        if (leaves.length > 0) {
-          // A leaf with our view already exists, use that
-          leaf = leaves[0];
-        } else {
-          // Our view could not be found in the workspace, create a new leaf
-          // in the right sidebar for it
-          leaf = workspace.getRightLeaf(false);
-          await leaf.setViewState({ type: VIEW_TYPE_EXAMPLE, active: true });
-        }
-    
-        // "Reveal" the leaf in case it is in a collapsed sidebar
-        workspace.revealLeaf(leaf);
-      }
-
     addCssClass() {
         const style = <HTMLStyleElement>document.createElement('style');
         style.textContent = `
@@ -297,8 +274,9 @@ export default class Heimdall extends Plugin {
     //     }
     // }
 
-    addPlaceholder(containerEl: HTMLElement) {
-        let placeholder = containerEl.querySelector('.placeholder');
+    addPlaceholder(containerEl: HTMLElement | null) {
+
+        let placeholder = containerEl?.querySelector('.placeholder');
         if (!placeholder) {
             placeholder = document.createElement('div');
             placeholder.className = 'placeholder';
@@ -306,22 +284,22 @@ export default class Heimdall extends Plugin {
                 <div>Oh, this file is password protected</div>
                 <button id="unlock-btn">Unlock</button>
             `;
-            containerEl.appendChild(placeholder);
+            containerEl?.appendChild(placeholder);
 
             const unlockButton = placeholder.querySelector('#unlock-btn');
             unlockButton?.addEventListener('click', () => {
                 new PasswordModal(this.app, () => {
-                    containerEl.classList.remove('hidden-content');
+                    containerEl?.classList.remove('hidden-content');
                     this.removePlaceholder(containerEl);
                 }).open();
             });
         }
     }
 
-    removePlaceholder(containerEl: HTMLElement) {
-        const placeholder = containerEl.querySelector('.placeholder');
+    removePlaceholder(containerEl: HTMLElement | null) {
+        const placeholder = containerEl?.querySelector('.placeholder');
         if (placeholder) {
-            containerEl.removeChild(placeholder);
+            containerEl?.removeChild(placeholder);
         }
     }
 
